@@ -1,3 +1,5 @@
 .venv
 *.pptx
 .~lock.*
+__pycache__
+*.xlsx

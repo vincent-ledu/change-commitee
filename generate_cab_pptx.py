@@ -2,35 +2,65 @@
 # -*- coding: utf-8 -*-
 """
 Generate a Change Advisory Board (CAB) support PowerPoint:
-- Slide 1: S+1 timeline (boxes positioned from start to end date, colored by Type)
-- Slides 2..N: one detail slide per change included in S+1
 
-Colors:
-  Urgent -> orange, Normal -> blue, Agile -> green
-RFC number is a clickable link: https://outils.change.fr/change=rfc123
+What it builds
+- S+1 timeline: boxes positioned from start to end date (with intra-day hour precision), colored by Type.
+- One detail slide per change included in S+1 (RFC + fields table).
+- Optional S-1 slides: a pie chart by closure code, and a table listing non-“Succès”.
+- Optional current week (S) timeline slide.
 
-USAGE:
+Visuals
+- Colors: Urgent → orange, Normal → blue, Agile → green.
+- RFC number is clickable: https://outils.change.fr/change=rfc123
+- Timeline box text:
+  - Line 1: “RFC – Résumé” (Résumé omitted on very narrow boxes).
+  - Lines 2–3: start and end planned date-times (always displayed), with smaller font.
+
+CLI (most common)
   python generate_cab_pptx.py \
-    --data cab_changes_5_weeks.csv \
-    --template "exemple_comité des changements_S+1.pptx" \
-    --out Comite_changements_Splus1.pptx \
-    --ref-date 2025-09-09
+    --data cab_changes.xlsx \
+    --template template_change_SPLUS1.pptx \
+    --out change_generated.pptx \
+    --ref-date 2025-09-09 \
+    --sminus1-pie --current-week
 
-Dependencies:
-  pip install python-pptx pandas python-dateutil openpyxl
-  (optional for auto-encoding): pip install charset-normalizer
+Main options
+- --data PATH                      CSV/Excel containing changes (required)
+- --template PATH                  PPTX template (required)
+- --out PATH                       Output PPTX (required)
+- --ref-date YYYY-MM-DD            Reference date; defaults to today
+- --detail-layout-index N          Layout index for detail slides
+- --splus1-layout-index N          Layout index for S+1 timeline (otherwise uses template’s first slide)
+- --sminus1-pie                    Add S-1 statistics slides (pie + non‑“Succès” list)
+- --sminus1-layout-index N         Layout index for S-1 slides
+- --current-week                   Add current week (S) timeline at the end
+- --current-week-layout-index N    Layout index for the current week slide
+- --list-layouts                   Print available template layouts and exit
+- --encoding ENC                   Force CSV encoding (e.g. cp1252, latin1, utf-8-sig)
+- --sep SEP                        Force CSV separator (e.g. ';' ',' '\t')
+
+Data requirements
+- Required columns: “Numéro”, “Type”, “Etat”, “Date de début planifiée”, “Date de fin planifiée”.
+- Dates are parsed robustly (dd/mm/yy, dd/mm/YYYY, YYYY-MM-DD, with/without HH:MM[:SS]).
+
+Dependencies
+- pip install python-pptx pandas python-dateutil openpyxl
+- Optional (auto-encoding for CSV): pip install charset-normalizer
 """
 from __future__ import annotations
 import argparse
-import os
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta, MO
+from datetime import datetime
 import pandas as pd
 from pptx import Presentation
 from pptx.util import Cm, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
-from pptx.enum.shapes import MSO_SHAPE
+# Extracted modules (step 1 of refactor)
+from layouts import choose_detail_layout, list_layouts
+from render.utils import hyperlink_for_rfc
+from services import prepare_dataframe, compute_weeks, filter_week_df, build_base_presentation, filter_by_tags
+from render.timeline import build_timeline_slide
+from periods import week_bounds_current
 
 # ---------------------- Helpers ----------------------
 
@@ -78,34 +108,7 @@ def parse_fr_date(s) -> datetime:
 
     raise ValueError(f"Unrecognized date/datetime format: {s!r}")
 
-def week_bounds_splus1(ref_date: datetime) -> tuple[datetime, datetime, datetime]:
-    """Return (monday_current, monday_next, sunday_next_end_of_day) for S+1.
-    Les bornes incluent tout le dimanche (23:59:59.999999).
-    """
-    monday_current = (ref_date + relativedelta(weekday=MO(-1))).replace(hour=0, minute=0, second=0, microsecond=0)
-    monday_next = monday_current + timedelta(weeks=1)
-    # Fin de dimanche = début du lundi suivant - 1 microseconde
-    sunday_next = (monday_next + timedelta(days=7)) - timedelta(microseconds=1)
-    return monday_current, monday_next, sunday_next
-
-def week_bounds_sminus1(ref_date: datetime) -> tuple[datetime, datetime]:
-    """Return (monday_prev, sunday_prev_end_of_day) for S-1.
-    Les bornes incluent tout le dimanche (23:59:59.999999).
-    """
-    monday_current = (ref_date + relativedelta(weekday=MO(-1))).replace(hour=0, minute=0, second=0, microsecond=0)
-    monday_prev = monday_current - timedelta(weeks=1)
-    sunday_prev = (monday_prev + timedelta(days=7)) - timedelta(microseconds=1)
-    return monday_prev, sunday_prev
-
-def hyperlink_for_rfc(rfc: str) -> str:
-    return f"https://outils.change.fr/change={str(rfc).lower()}"
-
-COLOR_MAP = {
-    "urgent": RGBColor(255, 140, 0),   # orange
-    "normal": RGBColor(0, 102, 204),   # blue
-    "agile":  RGBColor(0, 153, 0),     # green
-}
-DEFAULT_COLOR = RGBColor(100, 100, 100)
+# week bounds now provided by periods.py
 
 # Colors for S-1 closure code pie chart
 PIE_COLOR_SUCCESS = RGBColor(0, 176, 80)            # green
@@ -164,20 +167,12 @@ def add_sminus1_pie_slide(prs: Presentation,
     Selection criterion: rows with end date within [monday_prev, sunday_prev].
     """
     # Choose layout
-    layout = _choose_detail_layout(prs, layout_index)
+    layout = choose_detail_layout(prs, layout_index)
     slide = prs.slides.add_slide(layout)
 
-    # Title
-    left = Cm(1.0); top = Cm(1.0); width = prs.slide_width - Cm(2.0)
-    title_shape = slide.shapes.add_textbox(left, top, width, Cm(1.5))
-    title_tf = title_shape.text_frame
-    title_tf.clear()
-    p = title_tf.paragraphs[0]
-    p.alignment = PP_ALIGN.LEFT
-    run = p.add_run()
-    run.text = f"Changements S-1 par code de fermeture ({monday_prev.strftime('%d/%m/%Y')} → {sunday_prev.strftime('%d/%m/%Y')})"
-    run.font.size = Pt(24)
-    run.font.bold = True
+    # Title (use placeholder if available)
+    from render.utils import set_title
+    set_title(prs, slide, f"Changements S-1 par code de fermeture ({monday_prev.strftime('%d/%m/%Y')} → {sunday_prev.strftime('%d/%m/%Y')})")
 
     # Aggregate counts
     subset = df.copy()
@@ -260,20 +255,12 @@ def add_sminus1_non_success_slide(prs: Presentation,
                                    layout_index: int | None = None,
                                    closure_col: str = 'Code de fermeture') -> None:
     """Add a table slide listing S-1 changes that are not 'Succès'."""
-    layout = _choose_detail_layout(prs, layout_index)
+    layout = choose_detail_layout(prs, layout_index)
     slide = prs.slides.add_slide(layout)
 
-    # Title
-    left = Cm(1.0); top = Cm(1.0); width = prs.slide_width - Cm(2.0)
-    title_shape = slide.shapes.add_textbox(left, top, width, Cm(1.5))
-    title_tf = title_shape.text_frame
-    title_tf.clear()
-    p = title_tf.paragraphs[0]
-    p.alignment = PP_ALIGN.LEFT
-    run = p.add_run()
-    run.text = f"Changements S-1 non 'Succès' ({monday_prev.strftime('%d/%m/%Y')} → {sunday_prev.strftime('%d/%m/%Y')})"
-    run.font.size = Pt(24)
-    run.font.bold = True
+    # Title (use placeholder if available)
+    from render.utils import set_title
+    set_title(prs, slide, f"Changements S-1 non 'Succès' ({monday_prev.strftime('%d/%m/%Y')} → {sunday_prev.strftime('%d/%m/%Y')})")
 
     # Determine columns
     resume_col = _first_present_col(df, ['Résumé', 'Resume'])
@@ -294,7 +281,8 @@ def add_sminus1_non_success_slide(prs: Presentation,
 
     if not rows:
         # No data: show a friendly message
-        msg_shape = slide.shapes.add_textbox(Cm(1.0), Cm(3.0), width, Cm(3.0))
+        msg_width = prs.slide_width - Cm(2.0)
+        msg_shape = slide.shapes.add_textbox(Cm(1.0), Cm(3.0), msg_width, Cm(3.0))
         msg_tf = msg_shape.text_frame
         msg_tf.text = "Aucun changement non 'Succès' pour S-1."
         return
@@ -346,280 +334,9 @@ def add_sminus1_non_success_slide(prs: Presentation,
 
         r_idx += 1
 
-# ---------------------- Robust dataset loader ----------------------
+# dataset loader now provided by data_loader.py
 
-def try_guess_encoding(path: str) -> str | None:
-    try:
-        from charset_normalizer import from_path
-        res = from_path(path).best()
-        if res:
-            return res.encoding
-    except Exception:
-        pass
-    return None
-
-def load_dataset(path: str, encoding: str | None = None, sep: str | None = None) -> tuple[pd.DataFrame, dict]:
-    """
-    Load CSV or Excel with robust fallbacks.
-    Returns (DataFrame, meta) where meta contains chosen encoding/sep/engine/reader.
-    """
-    meta = {"reader": None, "encoding": encoding, "sep": sep, "engine": None}
-
-    ext = os.path.splitext(path)[1].lower()
-    if ext in (".xlsx", ".xls"):
-        df = pd.read_excel(path, dtype=str)
-        meta.update({"reader": "excel"})
-        return df, meta
-
-    # CSV path
-    encodings_to_try = [encoding] if encoding else []
-    guessed = try_guess_encoding(path)
-    if guessed and guessed not in encodings_to_try:
-        encodings_to_try.append(guessed)
-    for enc in ("utf-8", "utf-8-sig", "cp1252", "latin1", "iso-8859-1"):
-        if enc not in encodings_to_try:
-            encodings_to_try.append(enc)
-
-    seps_to_try = [sep] if sep is not None else [None, ";", ",", "\t"]
-    last_err = None
-    for enc in encodings_to_try:
-        for s in seps_to_try:
-            try:
-                engine = "python" if s is None else "c"  # sep=None inference needs "python"
-                df = pd.read_csv(path, dtype=str, encoding=enc, sep=s, engine=engine)
-                meta.update({"reader": "csv", "encoding": enc, "sep": s, "engine": engine})
-                return df, meta
-            except Exception as e:
-                last_err = e
-                continue
-    raise last_err if last_err else RuntimeError("Failed to load dataset")
-
-# ---------------------- Timeline builder ----------------------
-
-def build_timeline_slide(prs: Presentation,
-                         slide_index: int,
-                         week_df: pd.DataFrame,
-                         monday_next: datetime,
-                         sunday_next: datetime,
-                         margins_cm=(1.0, 1.0, 5.0, 2.0),
-                         col_gap_cm=0.15,
-                         row_height_cm=1.0,
-                         row_gap_cm=0.15) -> None:
-    """
-    Draw colored rounded rectangles for each change over a 7-day grid (S+1).
-    - slide_index: index of the slide to draw on (typically 0 for template's first slide)
-    - week_df: rows intersecting S+1, with parsed start_dt / end_dt
-    """
-    slide = prs.slides[slide_index]
-    SLIDE_WIDTH = prs.slide_width
-    SLIDE_HEIGHT = prs.slide_height
-
-    left_cm, right_cm, top_cm, bottom_cm = margins_cm
-    grid_left = Cm(left_cm)
-    grid_top = Cm(top_cm)
-    grid_width = SLIDE_WIDTH - Cm(left_cm + right_cm)
-    grid_height = SLIDE_HEIGHT - Cm(top_cm + bottom_cm)
-
-    col_count = 7
-    col_gap = Cm(col_gap_cm)
-    col_width = (grid_width - col_gap * (col_count - 1)) / col_count
-
-    row_height = Cm(row_height_cm)
-    row_gap = Cm(row_gap_cm)
-
-    rows = []  # occupancy rows over 7 columns
-
-    def find_row(start_idx, end_idx):
-        for r_idx, occ in enumerate(rows):
-            if all(not occ[c] for c in range(start_idx, end_idx + 1)):
-                for c in range(start_idx, end_idx + 1):
-                    occ[c] = True
-                return r_idx
-        new_occ = [False] * col_count
-        for c in range(start_idx, end_idx + 1):
-            new_occ[c] = True
-        rows.append(new_occ)
-        return len(rows) - 1
-
-    def day_index(dt):
-        return max(0, min(6, (dt - monday_next).days))
-
-    def clamp_to_week(dt: datetime) -> datetime:
-        if dt < monday_next:
-            return monday_next
-        if dt > sunday_next:
-            return sunday_next
-        return dt
-
-    def time_fraction_of_day(dt: datetime) -> float:
-        # returns fraction in [0,1]
-        seconds = dt.hour * 3600 + dt.minute * 60 + dt.second + dt.microsecond / 1_000_000.0
-        return max(0.0, min(1.0, seconds / 86400.0))
-
-    week_df = week_df.sort_values(["start_dt", "end_dt", "Numéro"], kind="stable")
-
-    for _, row in week_df.iterrows():
-        # Clamp to S+1 window for placement
-        start_dt = clamp_to_week(row["start_dt"]) if isinstance(row["start_dt"], datetime) else row["start_dt"]
-        end_dt = clamp_to_week(row["end_dt"]) if isinstance(row["end_dt"], datetime) else row["end_dt"]
-
-        start_idx = day_index(start_dt)
-        end_idx = day_index(end_dt)
-        if end_idx < start_idx:
-            end_idx = start_idx
-
-        # Row placement still based on whole-day occupancy
-        r_idx = find_row(start_idx, end_idx)
-
-        # Sub-day positioning using start/end hour within day
-        start_frac = time_fraction_of_day(start_dt)
-        end_frac = time_fraction_of_day(end_dt)
-
-        # Compute left/right edges in slide coordinates
-        left = grid_left + start_idx * (col_width + col_gap) + col_width * start_frac
-        right = grid_left + end_idx * (col_width + col_gap) + col_width * end_frac
-        # Ensure minimum width
-        if right <= left:
-            right = left + Cm(0.2)
-        width = right - left
-        top = grid_top + r_idx * (row_height + row_gap)
-        height = row_height
-
-        shp = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
-
-        typ_key = str(row.get("Type", "")).strip().lower()
-        fill_color = COLOR_MAP.get(typ_key, DEFAULT_COLOR)
-        shp.fill.solid()
-        shp.fill.fore_color.rgb = fill_color
-        shp.line.fill.background()
-
-        tf = shp.text_frame
-        tf.clear()
-        p = tf.paragraphs[0]
-        p.alignment = PP_ALIGN.LEFT
-
-        rfc = str(row["Numéro"]).strip()
-        resume = str(row.get("Résumé", "")).strip()
-
-        run1 = p.add_run()
-        run1.text = rfc
-        run1.hyperlink.address = hyperlink_for_rfc(rfc)
-        run1.font.bold = True
-        run1.font.size = Pt(12)
-        run1.font.color.rgb = RGBColor(255, 255, 255)
-
-        run2 = p.add_run()
-        run2.text = f" – {resume}"
-        run2.font.size = Pt(11)
-        run2.font.color.rgb = RGBColor(255, 255, 255)
-
-    week_label = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')})"
-    for shape in slide.shapes:
-        if hasattr(shape, "has_text_frame") and shape.has_text_frame:
-            txt = (shape.text_frame.text or "").strip().lower()
-            if "changement s+1" in txt or "changements s+1" in txt:
-                shape.text_frame.text = week_label
-                break
-
-# ---------------------- Detail slide builder ----------------------
-
-DETAIL_FIELDS = [
-    ("Type", "Type"),
-    ("État", "Etat"),
-    ("Début planifié", "Date de début planifiée"),
-    ("Fin planifiée", "Date de fin planifiée"),
-    ("Description", "Description"),
-    ("Justification", "Justification"),
-    ("Plan d’implémentation", "Plan d’implémentation"),
-    ("Analyse risques & impacts", "Analyse de risques et de l’impact"),
-    ("Plan de retour arrière", "Plan de retour en arrière"),
-    ("Plan de tests", "Plan de tests"),
-    # ("Groupe d’affectation", "Groupe d’affectation"),
-    # ("Groupe gestionnaire", "Groupe gestionnaire"),
-    ("Demandeur", "Demandeur"),
-    ("Affecté", "Affecté"),
-    # ("Element de configuration", "Element de configuration"),
-    ("CAB requis", "CAB requis"),
-    # ("Code de fermeture", "Code de fermeture"),
-    # ("Balises", "Balises"),
-    ("Informations complémentaires", "Informations complémentaires"),
-]
-
-def _choose_detail_layout(prs: Presentation, layout_index: int | None) -> "pptx.slide.SlideLayout":
-    total = len(prs.slide_layouts)
-    if total == 0:
-        raise IndexError("Template has no slide layouts")
-
-    # If user requested an index, use it safely (clamped) and warn if needed.
-    if layout_index is not None:
-        idx = max(0, min(layout_index, total - 1))
-        if idx != layout_index:
-            print(f"[WARN] detail layout index {layout_index} out of range; using {idx} instead (0..{total-1}).")
-        return prs.slide_layouts[idx]
-
-    # Auto-pick: try to find a 'blank' or 'vide' layout by name
-    name_candidates = ("blank", "vide", "title only", "titre uniquement", "titre seul")
-    for i, layout in enumerate(prs.slide_layouts):
-        name = (layout.name or "").strip().lower()
-        if any(k in name for k in name_candidates):
-            return layout
-
-    # Otherwise, pick the layout with the fewest placeholders (closest to blank)
-    def placeholder_count(layout):
-        try:
-            return len(layout.placeholders)
-        except Exception:
-            return 999
-
-    best = min(range(total), key=lambda i: placeholder_count(prs.slide_layouts[i]))
-    return prs.slide_layouts[best]
-
-
-def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None = None) -> None:
-    layout_to_use = _choose_detail_layout(prs, layout_index)
-
-    slide = prs.slides.add_slide(layout_to_use)
-
-    left = Cm(1.0); top = Cm(1.0); width = prs.slide_width - Cm(2.0); height = Cm(1.2)
-    title_shape = slide.shapes.add_textbox(left, top, width, height)
-    title_tf = title_shape.text_frame
-    title_tf.clear()
-    p = title_tf.paragraphs[0]
-    p.alignment = PP_ALIGN.LEFT
-
-    rfc = str(row["Numéro"]).strip()
-    resume = str(row.get("Résumé", "")).strip()
-
-    run1 = p.add_run()
-    run1.text = rfc
-    run1.hyperlink.address = hyperlink_for_rfc(rfc)
-    run1.font.size = Pt(28)
-    run1.font.bold = True
-
-    run2 = p.add_run()
-    run2.text = f" — {resume}"
-    run2.font.size = Pt(24)
-
-    tbl_left = Cm(1.0); tbl_top = Cm(3.0)
-    tbl_width = prs.slide_width - Cm(2.0)
-    rows_count = sum(1 for _, key in DETAIL_FIELDS if str(row.get(key, "")).strip() != "")
-    rows_count = max(rows_count, 1)
-    table = slide.shapes.add_table(rows_count, 2, tbl_left, tbl_top, tbl_width, Cm(12)).table
-    table.columns[0].width = Cm(6.0)
-    table.columns[1].width = tbl_width - table.columns[0].width
-
-    r = 0
-    for label, key in DETAIL_FIELDS:
-        val = str(row.get(key, "")).strip()
-        if val == "":
-            continue
-        cell_lbl = table.cell(r, 0)
-        cell_lbl.text = label
-        if cell_lbl.text_frame.paragraphs and cell_lbl.text_frame.paragraphs[0].runs:
-            cell_lbl.text_frame.paragraphs[0].runs[0].font.bold = True
-        cell_val = table.cell(r, 1)
-        cell_val.text = val
-        r += 1
+# timeline and detail slide builders now provided by render.timeline and render.details
 
 # ---------------------- Main ----------------------
 
@@ -633,52 +350,48 @@ def main():
     ap.add_argument("--sminus1-pie", action="store_true", help="Add an S-1 pie chart slide by closure code")
     ap.add_argument("--sminus1-layout-index", type=int, default=None, help="Optional slide layout index for S-1 pie slide")
     ap.add_argument("--list-layouts", action="store_true", help="List slide layouts in the template and exit")
+    ap.add_argument("--current-week", action="store_true", help="Add a timeline slide for the current week (S)")
+    ap.add_argument("--current-week-layout-index", type=int, default=None, help="Optional slide layout index for the current week slide")
     ap.add_argument("--encoding", default=None, help="Force CSV encoding (e.g. cp1252, latin1, utf-8-sig)")
     ap.add_argument("--sep", default=None, help="Force CSV separator (e.g. ';' ',' '\\t'). If omitted, auto-try common ones.")
+    ap.add_argument("--include-tags", default=None, help="Comma-separated tags to include (matches column 'Balises'). Example: RED_TRUC-TEL,GRE_BIDULE-PDT")
+    ap.add_argument("--splus1-layout-index", type=int, default=None, help="Optional slide layout index for S+1 timeline slide (otherwise uses template's first slide)")
     args = ap.parse_args()
 
-    df, meta = load_dataset(args.data, encoding=args.encoding, sep=args.sep)
+    df, meta = prepare_dataframe(args.data, encoding=args.encoding, sep=args.sep)
+    # Optional: filter by tags from 'Balises' column
+    if args.include_tags:
+        tags = [t.strip() for t in str(args.include_tags).split(',') if t.strip()]
+        before = len(df)
+        df = filter_by_tags(df, tags, column="Balises")
+        print(f"[INFO] Tag filter applied ({len(tags)} tag(s)): {before} → {len(df)} rows")
     print(f"[INFO] Loaded dataset via {meta.get('reader')} "
           f"(encoding={meta.get('encoding')}, sep={repr(meta.get('sep'))}, engine={meta.get('engine')})")
-
-    required_cols = ["Numéro", "Type", "Etat", "Date de début planifiée", "Date de fin planifiée"]
-    missing = [c for c in required_cols if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required column(s): {missing}. Present: {list(df.columns)}")
-
-    df["start_dt"] = df["Date de début planifiée"].apply(parse_fr_date)
-    df["end_dt"] = df["Date de fin planifiée"].apply(parse_fr_date)
 
     if args.ref_date:
         ref_date = datetime.strptime(args.ref_date, "%Y-%m-%d")
     else:
         ref_date = datetime.today()
 
-    _, monday_next, sunday_next = week_bounds_splus1(ref_date)
-    monday_prev, sunday_prev = week_bounds_sminus1(ref_date)
-
-    mask = (df["start_dt"] <= sunday_next) & (df["end_dt"] >= monday_next)
-    week_df = df.loc[mask].copy()
+    monday_next, sunday_next, monday_prev, sunday_prev = compute_weeks(ref_date)
+    week_df = filter_week_df(df, monday_next, sunday_next)
     print(f"[INFO] Changes in S+1: {len(week_df)}")
 
-    prs = Presentation(args.template)
-
+    # If only listing layouts, do it and exit early
     if args.list_layouts:
+        prs = Presentation(args.template)
         print("[INFO] Available slide layouts (index: name | placeholders)")
-        for i, layout in enumerate(prs.slide_layouts):
-            try:
-                ph = len(layout.placeholders)
-            except Exception:
-                ph = "?"
-            print(f"  {i}: {(layout.name or '').strip()} | placeholders={ph}")
+        for i, name, ph in list_layouts(prs):
+            print(f"  {i}: {name} | placeholders={ph}")
         return
-    build_timeline_slide(prs, slide_index=0, week_df=week_df,
-                         monday_next=monday_next, sunday_next=sunday_next)
-
-    # Detail slides first
-    week_df = week_df.sort_values(["start_dt", "Numéro"], kind="stable")
-    for _, row in week_df.iterrows():
-        add_detail_slide(prs, row, layout_index=args.detail_layout_index)
+    prs = build_base_presentation(
+        template_path=args.template,
+        week_df=week_df,
+        monday_next=monday_next,
+        sunday_next=sunday_next,
+        detail_layout_index=args.detail_layout_index,
+        splus1_layout_index=args.splus1_layout_index,
+    )
 
     # Then S-1 statistics and non-success list
     if args.sminus1_pie:
@@ -686,6 +399,20 @@ def main():
                               layout_index=args.sminus1_layout_index)
         add_sminus1_non_success_slide(prs, df=df, monday_prev=monday_prev, sunday_prev=sunday_prev,
                                       layout_index=args.sminus1_layout_index)
+
+    # Finally, optionally add a timeline slide for the current week (S)
+    if args.current_week:
+        monday_cur, sunday_cur = week_bounds_current(ref_date)
+        curr_week_df = filter_week_df(df, monday_cur, sunday_cur)
+        # Add a new slide with a blank-like layout
+        layout = choose_detail_layout(prs, layout_index=args.current_week_layout_index)
+        slide = prs.slides.add_slide(layout)
+        # Title for current week (use placeholder if available)
+        from render.utils import set_title
+        set_title(prs, slide, f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')})")
+        # Draw timeline on this new slide
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=curr_week_df,
+                             monday_next=monday_cur, sunday_next=sunday_cur)
 
     prs.save(args.out)
     print(f"[OK] Generated: {args.out}")
