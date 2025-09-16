@@ -137,13 +137,14 @@ def classify_closure(code: str) -> str:
     if not t:
         return ''
     # direct keywords
-    if 'succes' in t or 'reussi' in t or 'réussi' in code.lower():
+    # success bucket (accent-insensitive)
+    if 'succes' in t or 'reussi' in t:
         if 'diffic' in t:
             return 'succes_difficulte'
         return 'succes'
     if 'partiel' in t or 'partial' in t:
         return 'partiel'
-    if 'echec' in t or 'échec' in code.lower() or 'fail' in t:
+    if 'echec' in t or 'fail' in t:
         if 'retour' in t or 'rollback' in t:
             if 'sans' in t and ('retour' in t or 'rollback' in t):
                 # e.g., "echec sans retour arriere"
@@ -152,7 +153,7 @@ def classify_closure(code: str) -> str:
         # no explicit mention of rollback -> assume without rollback
         return 'echec_sans_retour'
     # explicit rollback mention without failure keyword -> consider as with rollback
-    if 'rollback' in t or 'retour arriere' in t or 'retour arrière' in code.lower():
+    if 'rollback' in t or 'retour arriere' in t:
         return 'echec_avec_retour'
     return ''
 
