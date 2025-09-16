@@ -3,6 +3,8 @@ import pandas as pd
 from pptx import Presentation
 from pptx.util import Cm, Pt
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.dml.color import RGBColor
 
 from layouts import choose_detail_layout
 from .utils import hyperlink_for_rfc
@@ -48,29 +50,17 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
     run2.font.size = Pt(24)
 
     # Info badges (Type, État, Demandeur, Affecté, Début/Fin planifiées)
-    badges_left = Cm(1.0)
-    badges_top = Cm(2.4)
-    avail_width = prs.slide_width - Cm(2.0)
-    cols = 3
-    gap = Cm(0.5)
-    box_w = (avail_width - gap * (cols - 1)) / cols
-    box_h = Cm(1.4)
-
-    def add_badge(x, y, w, h, label: str, value: str) -> None:
-        shp = slide.shapes.add_textbox(x, y, w, h)
-        tf = shp.text_frame
-        tf.clear()
-        p1 = tf.paragraphs[0]
-        p1.alignment = PP_ALIGN.LEFT
-        r1 = p1.add_run()
-        r1.text = label
-        r1.font.bold = True
-        r1.font.size = Pt(10)
-        p2 = tf.add_paragraph()
-        p2.alignment = PP_ALIGN.LEFT
-        r2 = p2.add_run()
-        r2.text = value
-        r2.font.size = Pt(12)
+    # Rendered as small rounded rectangles (two per row: label, value) at the very top‑right.
+    # We do NOT push the details table down; layout should leave room above the details table.
+    badges_top = Cm(1.0)  # top margin for badges area
+    # Area reserved on the right for badges (fixed compact width)
+    # Increased widths by 0.5 cm each as requested
+    label_w = Cm(1.8 + 0.5)
+    value_w = Cm(2.2 + 0.5)
+    pair_w = label_w + value_w
+    gap_h = Cm(0.06)
+    x_label = prs.slide_width - Cm(1.0) - pair_w
+    x_value = x_label + label_w
 
     # Prepare values (with robust date formatting)
     def _fmt_dt(col_dt: str, col_text: str) -> str:
@@ -88,18 +78,41 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
         ("Fin planifiée", _fmt_dt("end_dt", "Date de fin planifiée")),
     ]
 
-    for idx, (lab, val) in enumerate(badges):
-        if not val:
-            continue
-        row_i = idx // cols
-        col_i = idx % cols
-        x = badges_left + col_i * (box_w + gap)
-        y = badges_top + row_i * (box_h + Cm(0.3))
-        add_badge(x, y, box_w, box_h, lab, val)
+    # Draw rounded-rectangle badges if values present
+    items = [(lab, val) for lab, val in badges if val]
+    planned_tbl_top = Cm(4.6)
+    if items:
+        # Compute row height to fit before the details table top
+        max_h = planned_tbl_top - badges_top - Cm(0.1)
+        rows = len(items)
+        row_h = max(Cm(0.38), min(Cm(0.6), (max_h - gap_h * (rows - 1)) / max(1, rows)))
+
+        def _add_round_box(x, y, w, h, text, fill_rgb: RGBColor, bold=False):
+            shp = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h)
+            shp.fill.solid()
+            shp.fill.fore_color.rgb = fill_rgb
+            shp.line.fill.background()
+            tf = shp.text_frame
+            tf.clear()
+            p = tf.paragraphs[0]
+            p.alignment = PP_ALIGN.RIGHT
+            r = p.add_run()
+            r.text = text
+            r.font.size = Pt(6)
+            r.font.bold = bool(bold)
+            r.font.color.rgb = RGBColor(255, 255, 255)
+
+        color_label = RGBColor(91, 155, 213)   # Accent 1
+        color_value = RGBColor(42, 96, 153)    # #2a6099 for value boxes
+
+        for i, (lab, val) in enumerate(items):
+            y = badges_top + i * (row_h + gap_h)
+            _add_round_box(x_label, y, label_w, row_h, lab, color_label, bold=True)
+            _add_round_box(x_value, y, value_w, row_h, str(val), color_value, bold=False)
 
     # Table of selected long-form fields
     tbl_left = Cm(1.0)
-    tbl_top = Cm(4.6)
+    tbl_top = planned_tbl_top
     tbl_width = prs.slide_width - Cm(2.0)
     rows_count = sum(1 for _, key in DETAIL_FIELDS if str(row.get(key, "")).strip() != "")
     rows_count = max(rows_count, 1)

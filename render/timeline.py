@@ -101,6 +101,8 @@ def build_timeline_slide(prs: Presentation,
         if width < Cm(MIN_BOX_WIDTH_CM):
             width = Cm(MIN_BOX_WIDTH_CM)
             right = left + width
+        # Detect whether we are exactly at the minimal enforced width
+        is_min_width = int(width) == int(Cm(MIN_BOX_WIDTH_CM))
         top = grid_top + r_idx * (box_height + row_gap)
         height = box_height
 
@@ -116,8 +118,8 @@ def build_timeline_slide(prs: Presentation,
         tf.clear()
         tf.word_wrap = True
 
-        # If the box is narrow, hide the resume but keep dates
-        small_for_resume = width < Cm(4.0)
+        # If at minimal width (or otherwise very narrow), hide the resume but keep dates
+        small_for_resume = is_min_width
 
         # First line: RFC number (hyperlink) and optional resume
         p1 = tf.paragraphs[0]
