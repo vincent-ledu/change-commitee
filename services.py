@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 import re
+import unicodedata
 import pandas as pd
 from pptx import Presentation
 from layouts import choose_detail_layout
@@ -16,8 +17,59 @@ REQUIRED_COLS = [
 ]
 
 
+def _norm_label(s: str) -> str:
+    s = str(s or "").strip().lower()
+    # unifying quotes/apostrophes
+    s = s.replace("’", "'").replace("`", "'")
+    # normalize common separators to spaces
+    s = s.replace("_", " ").replace("-", " ").replace("–", " ")
+    # remove accents
+    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    # collapse whitespace
+    s = re.sub(r"\s+", " ", s)
+    # strip trailing punctuation like ':'
+    s = s.strip(": ")
+    return s
+
+
+def _harmonize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename incoming columns to canonical labels expected by the code, in an accent/quote-insensitive way.
+    Only covers known fields used by the generator; unknown columns are left as-is.
+    """
+    canonical = [
+        "Numéro", "Type", "Etat", "Date de début planifiée", "Date de fin planifiée",
+        "Résumé", "Description", "Justification", "Plan d’implémentation",
+        "Analyse de risques et de l’impact", "Plan de retour en arrière", "Plan de tests",
+        "Informations complémentaires", "Groupe d’affectation", "Groupe gestionnaire",
+        "Demandeur", "Affecté", "Element de configuration", "CAB requis",
+        "Code de fermeture", "Détail de clôture", "Balises",
+    ]
+    # Build normalized map for canonical labels; also add some common ASCII variants
+    canon_map: dict[str, str] = {}
+    for lab in canonical:
+        canon_map.setdefault(_norm_label(lab), lab)
+        # also provide an ASCII/straight-apostrophe variant mapping to the same
+        canon_map.setdefault(_norm_label(lab.replace("’", "'")), lab)
+
+    # Build rename mapping; avoid collisions if target already exists
+    renames: dict[str, str] = {}
+    existing_targets = set(df.columns)
+    for col in df.columns:
+        key = _norm_label(col)
+        target = canon_map.get(key)
+        if target and (col != target):
+            # do not rename if it would overwrite an existing distinct column
+            if target not in existing_targets or target == col:
+                renames[col] = target
+    if renames:
+        df = df.rename(columns=renames)
+    return df
+
+
 def prepare_dataframe(data_path: str, encoding: str | None = None, sep: str | None = None) -> tuple[pd.DataFrame, dict]:
     df, meta = load_dataset(data_path, encoding=encoding, sep=sep)
+    # Harmonize column labels (accent-insensitive, unify quotes)
+    df = _harmonize_columns(df)
     missing = [c for c in REQUIRED_COLS if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required column(s): {missing}. Present: {list(df.columns)}")
