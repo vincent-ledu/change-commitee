@@ -118,17 +118,45 @@ def build_base_presentation(template_path: str,
     prs = Presentation(template_path)
     # Place the S+1 timeline either on the template's first slide (default)
     # or on a newly added slide using the requested layout index.
-    if splus1_layout_index is None:
-        target_slide_index = 0
-    else:
-        layout = choose_detail_layout(prs, layout_index=splus1_layout_index)
-        prs.slides.add_slide(layout)
-        target_slide_index = len(prs.slides) - 1
+    # Prepare per-type dataframes
+    def _norm(s: str) -> str:
+        import unicodedata
+        s = str(s or '').strip().lower()
+        s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+        return s
+    type_series = week_df['Type'].fillna('').astype(str).map(_norm)
+    df_normal = week_df.loc[type_series == 'normal']
+    df_agile = week_df.loc[type_series == 'agile']
 
-    title = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')})"
-    build_timeline_slide(prs, slide_index=target_slide_index, week_df=week_df,
-                         monday_next=monday_next, sunday_next=sunday_next,
-                         title_text=title)
+    # Decide where to render: use template's first slide for the first timeline if no layout index
+    if splus1_layout_index is None:
+        # Slide 0: Normal
+        title_n = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — Normal"
+        build_timeline_slide(prs, slide_index=0, week_df=df_normal,
+                             monday_next=monday_next, sunday_next=sunday_next,
+                             title_text=title_n)
+        # Add slide: Agile
+        layout = choose_detail_layout(prs, layout_index=None)
+        prs.slides.add_slide(layout)
+        title_a = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — Agile"
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_agile,
+                             monday_next=monday_next, sunday_next=sunday_next,
+                             title_text=title_a)
+    else:
+        # Use the chosen layout for both slides
+        layout = choose_detail_layout(prs, layout_index=splus1_layout_index)
+        # Normal
+        prs.slides.add_slide(layout)
+        title_n = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — Normal"
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_normal,
+                             monday_next=monday_next, sunday_next=sunday_next,
+                             title_text=title_n)
+        # Agile
+        prs.slides.add_slide(layout)
+        title_a = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — Agile"
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_agile,
+                             monday_next=monday_next, sunday_next=sunday_next,
+                             title_text=title_a)
     week_df = week_df.sort_values(["start_dt", "Numéro"], kind="stable")
     for _, row in week_df.iterrows():
         add_detail_slide(prs, row, layout_index=detail_layout_index)

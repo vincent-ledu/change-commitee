@@ -45,6 +45,7 @@ def build_timeline_slide(prs: Presentation,
     row_gap = Cm(row_gap_cm)
 
     rows = []  # occupancy rows over 7 columns
+    MIN_BOX_WIDTH_CM = 5.0  # ensure room for "XXXXXXXX12345678" on first line
 
     def find_row(start_idx, end_idx):
         for r_idx, occ in enumerate(rows):
@@ -95,10 +96,11 @@ def build_timeline_slide(prs: Presentation,
         # Compute left/right edges in slide coordinates
         left = grid_left + start_idx * (col_width + col_gap) + col_width * start_frac
         right = grid_left + end_idx * (col_width + col_gap) + col_width * end_frac
-        # Ensure minimum width
-        if right <= left:
-            right = left + Cm(0.2)
+        # Enforce a minimum width sufficient to display "XXXXXXXX12345678"
         width = right - left
+        if width < Cm(MIN_BOX_WIDTH_CM):
+            width = Cm(MIN_BOX_WIDTH_CM)
+            right = left + width
         top = grid_top + r_idx * (box_height + row_gap)
         height = box_height
 
