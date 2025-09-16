@@ -104,8 +104,38 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
     rows_count = sum(1 for _, key in DETAIL_FIELDS if str(row.get(key, "")).strip() != "")
     rows_count = max(rows_count, 1)
     table = slide.shapes.add_table(rows_count, 2, tbl_left, tbl_top, tbl_width, Cm(12)).table
+    # Try to apply PowerPoint built-in table style "Medium Style 4 - Accent 1"
+    # (French UI: "Moyen 4, accentuation 1"). Fallbacks if not available.
+    for style_name in (
+        "Medium Style 4 - Accent 1",
+        "Medium Style 2 - Accent 1",
+        "Medium Style 1 - Accent 1",
+    ):
+        try:
+            table.style = style_name
+            break
+        except Exception:
+            pass
     table.columns[0].width = Cm(6.0)
     table.columns[1].width = tbl_width - table.columns[0].width
+
+    # Reduce inner paddings and line spacing to minimize extra vertical space
+    for r_i in range(rows_count):
+        for c_i in range(2):
+            cell = table.cell(r_i, c_i)
+            try:
+                cell.margin_top = Cm(0.05)
+                cell.margin_bottom = Cm(0.05)
+            except Exception:
+                pass
+            tf = cell.text_frame
+            for p in tf.paragraphs:
+                try:
+                    p.space_before = Pt(0)
+                    p.space_after = Pt(0)
+                    p.line_spacing = 1.0
+                except Exception:
+                    pass
 
     r = 0
     for label, key in DETAIL_FIELDS:
