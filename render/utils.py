@@ -4,8 +4,21 @@ from pptx.util import Cm, Pt
 from pptx.enum.text import PP_ALIGN
 
 
+RFC_URL_TEMPLATE = "https://outils.change.fr/change={rfc}"
+
+
+def set_rfc_url_template(template: str | None) -> None:
+    """Override the base URL template for RFC hyperlinks. Must contain '{rfc}'."""
+    global RFC_URL_TEMPLATE
+    if template and isinstance(template, str) and "{rfc}" in template:
+        RFC_URL_TEMPLATE = template
+
+
 def hyperlink_for_rfc(rfc: str) -> str:
-    return f"https://outils.change.fr/change={str(rfc).lower()}"
+    try:
+        return RFC_URL_TEMPLATE.format(rfc=str(rfc).lower())
+    except Exception:
+        return f"{RFC_URL_TEMPLATE}{str(rfc).lower()}"
 
 
 COLOR_MAP = {

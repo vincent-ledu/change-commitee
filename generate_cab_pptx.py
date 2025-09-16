@@ -57,10 +57,11 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 # Extracted modules (step 1 of refactor)
 from layouts import choose_detail_layout, list_layouts
-from render.utils import hyperlink_for_rfc
+from render.utils import hyperlink_for_rfc, set_rfc_url_template
 from services import prepare_dataframe, compute_weeks, filter_week_df, build_base_presentation, filter_by_tags
 from render.timeline import build_timeline_slide
 from periods import week_bounds_current
+from config import load_config
 
 # ---------------------- Helpers ----------------------
 
@@ -344,8 +345,9 @@ def add_sminus1_non_success_slide(prs: Presentation,
 def main():
     ap = argparse.ArgumentParser(description="Generate CAB PowerPoint (S+1 timeline + details).")
     ap.add_argument("--data", required=True, help="Path to CSV/Excel with changes")
-    ap.add_argument("--template", required=True, help="Path to PPTX template (timeline on slide 0)")
-    ap.add_argument("--out", required=True, help="Output PPTX path")
+    ap.add_argument("--config", default=None, help="Path to JSON config file for default options")
+    ap.add_argument("--template", required=False, help="Path to PPTX template (timeline on slide 0)")
+    ap.add_argument("--out", required=False, help="Output PPTX path")
     ap.add_argument("--ref-date", default=None, help="Reference date (YYYY-MM-DD); default: today")
     ap.add_argument("--detail-layout-index", type=int, default=None, help="Optional slide layout index to use for detail slides")
     ap.add_argument("--sminus1-pie", action="store_true", help="Add an S-1 pie chart slide by closure code")
@@ -358,6 +360,52 @@ def main():
     ap.add_argument("--include-tags", default=None, help="Comma-separated tags to include (matches column 'Balises'). Example: RED_TRUC-TEL,GRE_BIDULE-PDT")
     ap.add_argument("--splus1-layout-index", type=int, default=None, help="Optional slide layout index for S+1 timeline slide (otherwise uses template's first slide)")
     args = ap.parse_args()
+
+    # Load config file (JSON) and use it to fill missing options; CLI overrides config
+    cfg = load_config(args.config) if getattr(args, 'config', None) else {}
+    def _cfg(name, default=None):
+        return cfg.get(name, default)
+
+    # RFC URL template
+    set_rfc_url_template(_cfg('rfc_base_url') or _cfg('rfc_url_template'))
+
+    # Merge config defaults where CLI is unset/False
+    if not getattr(args, 'template', None):
+        setattr(args, 'template', _cfg('template', None))
+    if not getattr(args, 'out', None):
+        setattr(args, 'out', _cfg('out', None))
+    if not getattr(args, 'ref_date', None) and _cfg('ref_date'):
+        setattr(args, 'ref_date', _cfg('ref_date'))
+    if getattr(args, 'detail_layout_index', None) is None and _cfg('detail_layout_index') is not None:
+        setattr(args, 'detail_layout_index', int(_cfg('detail_layout_index')))
+    if not getattr(args, 'sminus1_pie', False) and bool(_cfg('sminus1_pie', False)):
+        setattr(args, 'sminus1_pie', True)
+    if getattr(args, 'sminus1_layout_index', None) is None and _cfg('sminus1_layout_index') is not None:
+        setattr(args, 'sminus1_layout_index', int(_cfg('sminus1_layout_index')))
+    if not getattr(args, 'list_layouts', False) and bool(_cfg('list_layouts', False)):
+        setattr(args, 'list_layouts', True)
+    if not getattr(args, 'encoding', None) and _cfg('encoding'):
+        setattr(args, 'encoding', _cfg('encoding'))
+    if getattr(args, 'sep', None) is None and (_cfg('sep') is not None):
+        setattr(args, 'sep', _cfg('sep'))
+    if getattr(args, 'splus1_layout_index', None) is None and _cfg('splus1_layout_index') is not None:
+        setattr(args, 'splus1_layout_index', int(_cfg('splus1_layout_index')))
+    if not getattr(args, 'current_week', False) and bool(_cfg('current_week', False)):
+        setattr(args, 'current_week', True)
+    if getattr(args, 'current_week_layout_index', None) is None and _cfg('current_week_layout_index') is not None:
+        setattr(args, 'current_week_layout_index', int(_cfg('current_week_layout_index')))
+    if not getattr(args, 'include_tags', None) and _cfg('include_tags'):
+        tags = _cfg('include_tags')
+        if isinstance(tags, list):
+            setattr(args, 'include_tags', ",".join(str(t) for t in tags))
+        else:
+            setattr(args, 'include_tags', str(tags))
+
+    # Validate required values possibly supplied via config
+    if not getattr(args, 'template', None):
+        raise SystemExit("error: --template is required (can be provided via --config)")
+    if not getattr(args, 'out', None):
+        raise SystemExit("error: --out is required (can be provided via --config)")
 
     df, meta = prepare_dataframe(args.data, encoding=args.encoding, sep=args.sep)
     # Optional: filter by tags from 'Balises' column
