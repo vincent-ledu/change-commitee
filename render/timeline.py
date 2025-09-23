@@ -40,8 +40,8 @@ def build_timeline_slide(prs: Presentation,
     col_width = (grid_width - col_gap * (col_count - 1)) / col_count
 
     row_height = Cm(row_height_cm)
-    # Box height tuned so up to 4 lines fit while keeping a slimmer footprint
-    box_height = max(Cm(1.4), row_height)
+    # Box height tuned so up to 5 lines fit comfortably while keeping a compact footprint
+    box_height = max(Cm(1.8), row_height)
     row_gap = Cm(row_gap_cm)
 
     MIN_BOX_WIDTH_CM = 5.0  # ensure room for "XXXXXXXX12345678" on first line
