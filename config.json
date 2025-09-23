@@ -13,8 +13,6 @@
   "current_week": true,
   "current_week_layout_index": 2,
 
-  "include_tags": "RED_TRUC-TEL,GRE_BIDULE-PDT",
-
   "list_layouts": false,
 
   "rfc_base_url": "https://outils.change.fr/change={rfc}",

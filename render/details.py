@@ -78,6 +78,27 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
         ("Fin planifiée", _fmt_dt("end_dt", "Date de fin planifiée")),
     ]
 
+    # Determine badge colors based on change type (top-right cartouche)
+    type_label = str(row.get("Type", "")).strip().lower()
+    badge_palettes = {
+        "normal": (
+            RGBColor(91, 155, 213),  # blue label
+            RGBColor(42, 96, 153),   # blue value
+        ),
+        "agile": (
+            RGBColor(142, 197, 71),  # green label
+            RGBColor(94, 155, 43),   # green value
+        ),
+        "urgent": (
+            RGBColor(242, 171, 78),  # orange label
+            RGBColor(209, 118, 6),   # orange value
+        ),
+    }
+    color_label, color_value = badge_palettes.get(
+        type_label,
+        badge_palettes["normal"],  # default to blue when type unrecognized
+    )
+
     # Draw rounded-rectangle badges if values present
     items = [(lab, val) for lab, val in badges if val]
     planned_tbl_top = Cm(4.6)
@@ -102,13 +123,25 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
             r.font.bold = bool(bold)
             r.font.color.rgb = RGBColor(255, 255, 255)
 
-        color_label = RGBColor(91, 155, 213)   # Accent 1
-        color_value = RGBColor(42, 96, 153)    # #2a6099 for value boxes
+        def _needs_state_alert(badge_label: str, badge_value: str) -> bool:
+            if type_label != "normal" or badge_label.lower() != "état":
+                return False
+            import unicodedata
+            norm = ''.join(
+                c for c in unicodedata.normalize('NFD', str(badge_value or "").strip().lower())
+                if unicodedata.category(c) != 'Mn'
+            )
+            return norm not in {"planifie", "autoriser"}
 
         for i, (lab, val) in enumerate(items):
             y = badges_top + i * (row_h + gap_h)
-            _add_round_box(x_label, y, label_w, row_h, lab, color_label, bold=True)
-            _add_round_box(x_value, y, value_w, row_h, str(val), color_value, bold=False)
+            label_color = color_label
+            value_color = color_value
+            if _needs_state_alert(lab, val):
+                label_color = RGBColor(242, 171, 78)
+                value_color = RGBColor(209, 118, 6)
+            _add_round_box(x_label, y, label_w, row_h, lab, label_color, bold=True)
+            _add_round_box(x_value, y, value_w, row_h, str(val), value_color, bold=False)
 
     # Table of selected long-form fields
     tbl_left = Cm(1.0)

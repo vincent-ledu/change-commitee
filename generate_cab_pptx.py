@@ -57,7 +57,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 # Extracted modules (step 1 of refactor)
 from layouts import choose_detail_layout, list_layouts
-from render.utils import hyperlink_for_rfc, set_rfc_url_template
+from render.utils import hyperlink_for_rfc, set_rfc_url_template, set_timeline_color_map
 from services import prepare_dataframe, compute_weeks, filter_week_df, build_base_presentation, filter_by_tags
 from render.timeline import build_timeline_slide
 from periods import week_bounds_current
@@ -366,8 +366,9 @@ def main():
     def _cfg(name, default=None):
         return cfg.get(name, default)
 
-    # RFC URL template
+    # Branding / visuals overrides
     set_rfc_url_template(_cfg('rfc_base_url') or _cfg('rfc_url_template'))
+    set_timeline_color_map(_cfg('timeline_colors'))
 
     # Merge config defaults where CLI is unset/False
     if not getattr(args, 'template', None):

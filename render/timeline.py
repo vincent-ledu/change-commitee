@@ -112,7 +112,8 @@ def build_timeline_slide(prs: Presentation,
         fill_color = COLOR_MAP.get(typ_key, DEFAULT_COLOR)
         shp.fill.solid()
         shp.fill.fore_color.rgb = fill_color
-        shp.line.fill.background()
+        shp.line.width = Pt(0.75)
+        shp.line.color.rgb = RGBColor(0, 0, 0)
 
         tf = shp.text_frame
         tf.clear()
