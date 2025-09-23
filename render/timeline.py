@@ -127,6 +127,12 @@ def build_timeline_slide(prs: Presentation,
         p1.alignment = PP_ALIGN.LEFT
         rfc = str(row.get("Numéro", "")).strip()
         resume = str(row.get("Résumé", "")).strip()
+        config_item = ""
+        for key in ("Élément de configuration", "Element de configuration"):
+            raw_val = row.get(key)
+            if raw_val:
+                config_item = str(raw_val).strip()
+                break
 
         run_rfc = p1.add_run()
         run_rfc.text = rfc
@@ -141,9 +147,17 @@ def build_timeline_slide(prs: Presentation,
             run_sum.text = f" – {resume}"
             run_sum.font.size = Pt(8)
             run_sum.font.color.rgb = RGBColor(255, 255, 255)
+        elif small_for_resume and config_item:
+            # For narrow boxes, show the configuration element on the second line
+            p_conf = tf.add_paragraph()
+            p_conf.alignment = PP_ALIGN.LEFT
+            run_conf = p_conf.add_run()
+            run_conf.text = config_item
+            run_conf.font.size = Pt(8)
+            run_conf.font.color.rgb = RGBColor(255, 255, 255)
 
         # Dates must be kept even when the box is small for the resume
-        # Second line: start planned date-time
+        # Next line: start planned date-time (third line when element of configuration is shown)
         p2 = tf.add_paragraph()
         p2.alignment = PP_ALIGN.LEFT
         try:
