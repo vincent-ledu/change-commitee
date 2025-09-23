@@ -44,20 +44,8 @@ def build_timeline_slide(prs: Presentation,
     box_height = max(Cm(1.4), row_height)
     row_gap = Cm(row_gap_cm)
 
-    rows = []  # occupancy rows over 7 columns
     MIN_BOX_WIDTH_CM = 5.0  # ensure room for "XXXXXXXX12345678" on first line
-
-    def find_row(start_idx, end_idx):
-        for r_idx, occ in enumerate(rows):
-            if all(not occ[c] for c in range(start_idx, end_idx + 1)):
-                for c in range(start_idx, end_idx + 1):
-                    occ[c] = True
-                return r_idx
-        new_occ = [False] * col_count
-        for c in range(start_idx, end_idx + 1):
-            new_occ[c] = True
-        rows.append(new_occ)
-        return len(rows) - 1
+    row_segments: list[list[tuple[int, int]]] = []  # stores (left,right) per row in EMUs
 
     def day_index(dt):
         return max(0, min(6, (dt - monday_next).days))
@@ -86,9 +74,6 @@ def build_timeline_slide(prs: Presentation,
         if end_idx < start_idx:
             end_idx = start_idx
 
-        # Row placement still based on whole-day occupancy
-        r_idx = find_row(start_idx, end_idx)
-
         # Sub-day positioning using start/end hour within day
         start_frac = time_fraction_of_day(start_dt)
         end_frac = time_fraction_of_day(end_dt)
@@ -103,6 +88,21 @@ def build_timeline_slide(prs: Presentation,
             right = left + width
         # Detect whether we are exactly at the minimal enforced width
         is_min_width = int(width) == int(Cm(MIN_BOX_WIDTH_CM))
+        left_emu = int(left)
+        right_emu = int(right)
+
+        # Find first row where the interval does not overlap existing boxes
+        r_idx = None
+        for idx, segments in enumerate(row_segments):
+            overlap = any(not (right_emu <= seg_left or left_emu >= seg_right) for seg_left, seg_right in segments)
+            if not overlap:
+                r_idx = idx
+                segments.append((left_emu, right_emu))
+                break
+        if r_idx is None:
+            r_idx = len(row_segments)
+            row_segments.append([(left_emu, right_emu)])
+
         top = grid_top + r_idx * (box_height + row_gap)
         height = box_height
 
