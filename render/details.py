@@ -52,7 +52,7 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
     # Info badges (Type, État, Demandeur, Affecté, Début/Fin planifiées)
     # Rendered as small rounded rectangles (two per row: label, value) at the very top‑right.
     # We do NOT push the details table down; layout should leave room above the details table.
-    badges_top = Cm(1.0)  # top margin for badges area
+    badges_top = Cm(0.5)  # top margin for badges area (moved up by 0.5 cm)
     # Area reserved on the right for badges (fixed compact width)
     # Increased widths by 0.5 cm each as requested
     label_w = Cm(1.8 + 0.5)
@@ -190,14 +190,14 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
             continue
         cell_lbl = table.cell(r, 0)
         cell_lbl.text = label
-        # Bold label and set table font size to 10pt
+        # Bold label and set table font size to 8pt
         for p in cell_lbl.text_frame.paragraphs:
             for run in p.runs:
-                run.font.size = Pt(10)
+                run.font.size = Pt(8)
                 run.font.bold = True
         cell_val = table.cell(r, 1)
         cell_val.text = val
         for p in cell_val.text_frame.paragraphs:
             for run in p.runs:
-                run.font.size = Pt(10)
+                run.font.size = Pt(8)
         r += 1

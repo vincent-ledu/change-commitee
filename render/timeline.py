@@ -40,8 +40,8 @@ def build_timeline_slide(prs: Presentation,
     col_width = (grid_width - col_gap * (col_count - 1)) / col_count
 
     row_height = Cm(row_height_cm)
-    # Box height tuned so up to 4 lines fit, smaller than previous double-height
-    box_height = max(Cm(1.8), row_height)
+    # Box height tuned so up to 4 lines fit while keeping a slimmer footprint
+    box_height = max(Cm(1.4), row_height)
     row_gap = Cm(row_gap_cm)
 
     rows = []  # occupancy rows over 7 columns
@@ -133,13 +133,13 @@ def build_timeline_slide(prs: Presentation,
         if rfc:
             run_rfc.hyperlink.address = hyperlink_for_rfc(rfc)
         run_rfc.font.bold = True
-        run_rfc.font.size = Pt(12)
+        run_rfc.font.size = Pt(8)
         run_rfc.font.color.rgb = RGBColor(255, 255, 255)
 
         if not small_for_resume and resume:
             run_sum = p1.add_run()
             run_sum.text = f" – {resume}"
-            run_sum.font.size = Pt(11)
+            run_sum.font.size = Pt(8)
             run_sum.font.color.rgb = RGBColor(255, 255, 255)
 
         # Dates must be kept even when the box is small for the resume
@@ -152,7 +152,7 @@ def build_timeline_slide(prs: Presentation,
             start_str = str(row.get("Date de début planifiée", "")).strip()
         run_start = p2.add_run()
         run_start.text = start_str
-        run_start.font.size = Pt(8)  # reduced by 2pt
+        run_start.font.size = Pt(8)
         run_start.font.color.rgb = RGBColor(255, 255, 255)
 
         # Third line: end planned date-time
@@ -164,7 +164,7 @@ def build_timeline_slide(prs: Presentation,
             end_str = str(row.get("Date de fin planifiée", "")).strip()
         run_end = p3.add_run()
         run_end.text = end_str
-        run_end.font.size = Pt(8)  # reduced by 2pt
+        run_end.font.size = Pt(8)
         run_end.font.color.rgb = RGBColor(255, 255, 255)
 
     if title_text:
