@@ -41,7 +41,7 @@ def _harmonize_columns(df: pd.DataFrame) -> pd.DataFrame:
         "Résumé", "Description", "Justification", "Plan d’implémentation",
         "Analyse de risques et de l’impact", "Plan de retour en arrière", "Plan de tests",
         "Informations complémentaires", "Groupe d’affectation", "Groupe gestionnaire",
-        "Demandeur", "Affecté", "Element de configuration", "CAB requis",
+        "Demandeur", "Affecté", "Affecté à", "Element de configuration", "CAB requis",
         "Code de fermeture", "Détail de clôture", "Balises",
     ]
     # Build normalized map for canonical labels; also add some common ASCII variants

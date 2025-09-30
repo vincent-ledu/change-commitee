@@ -295,6 +295,14 @@ def add_sminus1_non_success_slide(prs: Presentation,
     headers = ['Numéro', 'Résumé', 'Code de fermeture', 'Détail de clôture']
     table = slide.shapes.add_table(len(rows) + 1, len(headers), tbl_left, tbl_top, tbl_width, Cm(12)).table
 
+    def _set_cell_font(cell, size_pt: float, bold: bool | None = None) -> None:
+        tf = cell.text_frame
+        for paragraph in tf.paragraphs:
+            for run in paragraph.runs:
+                run.font.size = Pt(size_pt)
+                if bold is not None:
+                    run.font.bold = bold
+
     # Set column widths (approximate for readability)
     col_widths = [Cm(4.0), Cm(11.0), Cm(5.0), tbl_width - Cm(4.0 + 11.0 + 5.0)]
     for i, w in enumerate(col_widths):
@@ -304,8 +312,7 @@ def add_sminus1_non_success_slide(prs: Presentation,
     for i, h in enumerate(headers):
         cell = table.cell(0, i)
         cell.text = h
-        if cell.text_frame.paragraphs and cell.text_frame.paragraphs[0].runs:
-            cell.text_frame.paragraphs[0].runs[0].font.bold = True
+        _set_cell_font(cell, 8, bold=True)
 
     # Data rows
     r_idx = 1
@@ -321,18 +328,22 @@ def add_sminus1_non_success_slide(prs: Presentation,
         if rfc:
             run0.hyperlink.address = hyperlink_for_rfc(rfc)
             run0.font.bold = True
+        _set_cell_font(cell_num, 8)
 
         # Résumé
         cell_res = table.cell(r_idx, 1)
         cell_res.text = str(r.get(resume_col, '')) if resume_col else ''
+        _set_cell_font(cell_res, 8)
 
         # Code de fermeture
         cell_code = table.cell(r_idx, 2)
         cell_code.text = str(r.get(closure_col, ''))
+        _set_cell_font(cell_code, 8)
 
         # Détail de clôture
         cell_det = table.cell(r_idx, 3)
         cell_det.text = str(r.get(detail_col, '')) if detail_col else ''
+        _set_cell_font(cell_det, 8)
 
         r_idx += 1
 

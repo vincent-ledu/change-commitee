@@ -49,7 +49,7 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
     run2.text = f" — {resume}"
     run2.font.size = Pt(24)
 
-    # Info badges (Type, État, Demandeur, Affecté, Début/Fin planifiées)
+    # Info badges (Type, État, Demandeur, Affecté, Affecté à, Début/Fin planifiées)
     # Rendered as small rounded rectangles (two per row: label, value) at the very top‑right.
     # We do NOT push the details table down; layout should leave room above the details table.
     badges_top = Cm(0.5)  # top margin for badges area (moved up by 0.5 cm)
@@ -74,6 +74,7 @@ def add_detail_slide(prs: Presentation, row: pd.Series, layout_index: int | None
         ("État", str(row.get("Etat", "")).strip()),
         ("Demandeur", str(row.get("Demandeur", "")).strip()),
         ("Affecté", str(row.get("Affecté", "")).strip()),
+        ("Affecté à", str(row.get("Affecté à", "")).strip()),
         ("Début planifié", _fmt_dt("start_dt", "Date de début planifiée")),
         ("Fin planifiée", _fmt_dt("end_dt", "Date de fin planifiée")),
     ]
