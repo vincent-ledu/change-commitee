@@ -266,6 +266,7 @@ def add_sminus1_non_success_slide(prs: Presentation,
 
     # Determine columns
     resume_col = _first_present_col(df, ['Résumé', 'Resume'])
+    state_col = _first_present_col(df, ['État', 'Etat', 'Etat du changement', 'Etat du changements'])
     detail_col = _first_present_col(df, ['Détail de clôture', 'Detail de clôture', 'Détail de cloture', 'Detail de cloture'])
 
     subset = df.copy()
@@ -292,19 +293,20 @@ def add_sminus1_non_success_slide(prs: Presentation,
     # Build table with header + items
     tbl_left = Cm(1.0); tbl_top = Cm(3.0)
     tbl_width = prs.slide_width - Cm(2.0)
-    headers = ['Numéro', 'Résumé', 'Code de fermeture', 'Détail de clôture']
+    headers = ['Numéro', 'Résumé', 'Etat', 'Code de fermeture', 'Détail de clôture']
     table = slide.shapes.add_table(len(rows) + 1, len(headers), tbl_left, tbl_top, tbl_width, Cm(12)).table
 
-    def _set_cell_font(cell, size_pt: float, bold: bool | None = None) -> None:
+    def _set_cell_font(cell, size_pt: float | None = None, bold: bool | None = None) -> None:
         tf = cell.text_frame
         for paragraph in tf.paragraphs:
             for run in paragraph.runs:
-                run.font.size = Pt(size_pt)
+                if size_pt is not None:
+                    run.font.size = Pt(size_pt)
                 if bold is not None:
                     run.font.bold = bold
 
     # Set column widths (approximate for readability)
-    col_widths = [Cm(4.0), Cm(11.0), Cm(5.0), tbl_width - Cm(4.0 + 11.0 + 5.0)]
+    col_widths = [Cm(4.0), Cm(9.0), Cm(4.0), Cm(5.0), tbl_width - Cm(4.0 + 9.0 + 4.0 + 5.0)]
     for i, w in enumerate(col_widths):
         table.columns[i].width = w
 
@@ -312,7 +314,7 @@ def add_sminus1_non_success_slide(prs: Presentation,
     for i, h in enumerate(headers):
         cell = table.cell(0, i)
         cell.text = h
-        _set_cell_font(cell, 8, bold=True)
+        _set_cell_font(cell, bold=True)
 
     # Data rows
     r_idx = 1
@@ -328,22 +330,21 @@ def add_sminus1_non_success_slide(prs: Presentation,
         if rfc:
             run0.hyperlink.address = hyperlink_for_rfc(rfc)
             run0.font.bold = True
-        _set_cell_font(cell_num, 8)
-
         # Résumé
         cell_res = table.cell(r_idx, 1)
         cell_res.text = str(r.get(resume_col, '')) if resume_col else ''
-        _set_cell_font(cell_res, 8)
+
+        # Etat
+        cell_state = table.cell(r_idx, 2)
+        cell_state.text = str(r.get(state_col, '')) if state_col else ''
 
         # Code de fermeture
-        cell_code = table.cell(r_idx, 2)
+        cell_code = table.cell(r_idx, 3)
         cell_code.text = str(r.get(closure_col, ''))
-        _set_cell_font(cell_code, 8)
 
         # Détail de clôture
-        cell_det = table.cell(r_idx, 3)
+        cell_det = table.cell(r_idx, 4)
         cell_det.text = str(r.get(detail_col, '')) if detail_col else ''
-        _set_cell_font(cell_det, 8)
 
         r_idx += 1
 
