@@ -9,7 +9,7 @@ from pptx.dml.color import RGBColor
 
 from .utils import COLOR_MAP, DEFAULT_COLOR, hyperlink_for_rfc, set_title
 
-BADGE_COLOR = RGBColor(112, 48, 160)  # purple badge for assignee
+BADGE_COLOR = RGBColor(255, 215, 0)  # gold badge for assignee
 
 
 def build_timeline_slide(prs: Presentation,
