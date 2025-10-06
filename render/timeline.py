@@ -11,7 +11,6 @@ from .utils import COLOR_MAP, DEFAULT_COLOR, hyperlink_for_rfc, set_title
 
 BADGE_COLOR = RGBColor(255, 215, 0)  # gold badge for assignee
 
-
 def build_timeline_slide(prs: Presentation,
                          slide_index: int,
                          week_df: pd.DataFrame,
@@ -210,8 +209,8 @@ def build_timeline_slide(prs: Presentation,
                 available_width = width - Cm(0.4)
                 if available_width > Cm(1.0):
                     badge_width = max(
-                        Cm(0.75),
-                        min(available_width, Cm(3.0), Cm(0.7 + 0.125 * len(assignee))),
+                        Cm(1.5),
+                        min(available_width, Cm(6.0), Cm(1.4 + 0.25 * len(assignee))),
                     )
                     badge_height = Cm(0.6)
                     badge_left = max(left + Cm(0.1), left + width - badge_width - Cm(0.2))
