@@ -9,7 +9,7 @@ from pptx.dml.color import RGBColor
 
 from .utils import COLOR_MAP, DEFAULT_COLOR, hyperlink_for_rfc, set_title
 
-BADGE_COLOR = RGBColor(255, 215, 0)  # gold badge for assignee
+BADGE_COLOR = RGBColor(218, 165, 32)  # darker gold badge for assignee
 
 def build_timeline_slide(prs: Presentation,
                          slide_index: int,
@@ -208,10 +208,9 @@ def build_timeline_slide(prs: Presentation,
             if assignee and assignee.lower() not in {"nan", "nat", "none"}:
                 available_width = width - Cm(0.4)
                 if available_width > Cm(1.0):
-                    badge_width = max(
-                        Cm(1.5),
-                        min(available_width, Cm(6.0), Cm(1.4 + 0.25 * len(assignee))),
-                    )
+                    char_count = max(1, len(assignee))
+                    estimated_cm = 0.4 + 0.18 * char_count
+                    badge_width = min(available_width, Cm(estimated_cm))
                     badge_height = Cm(0.6)
                     badge_left = max(left + Cm(0.1), left + width - badge_width - Cm(0.2))
                     badge_top = top + height - badge_height - Cm(0.2)

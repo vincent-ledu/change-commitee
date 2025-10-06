@@ -472,13 +472,23 @@ def main():
             s = str(s or '').strip().lower()
             return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
         type_series = curr_week_df['Type'].fillna('').astype(str).map(_norm)
+        info_labels = {'pour information', 'information', 'info'}
+        df_urgent = curr_week_df.loc[type_series == 'urgent']
         df_norm = curr_week_df.loc[type_series == 'normal']
         df_agil = curr_week_df.loc[type_series == 'agile']
+        df_info = curr_week_df.loc[type_series.isin(info_labels)]
+
+        # Add slide: Urgent
+        layout = choose_detail_layout(prs, layout_index=args.current_week_layout_index)
+        prs.slides.add_slide(layout)
+        from render.utils import set_title
+        set_title(prs, prs.slides[-1], f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')}) — Urgent")
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_urgent,
+                             monday_next=monday_cur, sunday_next=sunday_cur)
 
         # Add slide: Normal
         layout = choose_detail_layout(prs, layout_index=args.current_week_layout_index)
         prs.slides.add_slide(layout)
-        from render.utils import set_title
         set_title(prs, prs.slides[-1], f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')}) — Normal")
         build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_norm,
                              monday_next=monday_cur, sunday_next=sunday_cur)
@@ -488,6 +498,13 @@ def main():
         prs.slides.add_slide(layout)
         set_title(prs, prs.slides[-1], f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')}) — Agile")
         build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_agil,
+                             monday_next=monday_cur, sunday_next=sunday_cur)
+
+        # Add slide: Pour information
+        layout = choose_detail_layout(prs, layout_index=args.current_week_layout_index)
+        prs.slides.add_slide(layout)
+        set_title(prs, prs.slides[-1], f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')}) — Pour information")
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_info,
                              monday_next=monday_cur, sunday_next=sunday_cur)
 
     prs.save(args.out)

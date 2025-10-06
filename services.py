@@ -125,9 +125,11 @@ def build_base_presentation(template_path: str,
         s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
         return s
     type_series = week_df['Type'].fillna('').astype(str).map(_norm)
+    info_labels = {'pour information', 'information', 'info'}
     df_urgent = week_df.loc[type_series == 'urgent']
     df_normal = week_df.loc[type_series == 'normal']
     df_agile = week_df.loc[type_series == 'agile']
+    df_info = week_df.loc[type_series.isin(info_labels)]
 
     # Decide where to render: use template's first slide for the first timeline if no layout index
     if splus1_layout_index is None:
@@ -150,8 +152,14 @@ def build_base_presentation(template_path: str,
         build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_agile,
                              monday_next=monday_next, sunday_next=sunday_next,
                              title_text=title_a)
+        layout = choose_detail_layout(prs, layout_index=None)
+        prs.slides.add_slide(layout)
+        title_i = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — Pour information"
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_info,
+                             monday_next=monday_next, sunday_next=sunday_next,
+                             title_text=title_i)
     else:
-        # Use the chosen layout for all slides (Urgent → Normal → Agile)
+        # Use the chosen layout for all slides (Urgent → Normal → Agile → Pour information)
         layout = choose_detail_layout(prs, layout_index=splus1_layout_index)
         prs.slides.add_slide(layout)
         title_u = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — Urgent"
@@ -168,6 +176,11 @@ def build_base_presentation(template_path: str,
         build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_agile,
                              monday_next=monday_next, sunday_next=sunday_next,
                              title_text=title_a)
+        prs.slides.add_slide(layout)
+        title_i = f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — Pour information"
+        build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_info,
+                             monday_next=monday_next, sunday_next=sunday_next,
+                             title_text=title_i)
     def _type_priority(norm_label: str) -> int:
         if norm_label == 'urgent':
             return 0
@@ -175,7 +188,9 @@ def build_base_presentation(template_path: str,
             return 1
         if norm_label == 'agile':
             return 2
-        return 3
+        if norm_label in info_labels:
+            return 3
+        return 4
 
     week_df = week_df.assign(_type_order=type_series.map(_type_priority))
     week_df = week_df.sort_values(["_type_order", "start_dt", "Numéro"], kind="stable")
