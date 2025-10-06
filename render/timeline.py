@@ -3,11 +3,13 @@ from datetime import datetime
 import pandas as pd
 from pptx import Presentation
 from pptx.util import Cm, Pt
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.dml.color import RGBColor
 
 from .utils import COLOR_MAP, DEFAULT_COLOR, hyperlink_for_rfc, set_title
+
+BADGE_COLOR = RGBColor(112, 48, 160)  # purple badge for assignee
 
 
 def build_timeline_slide(prs: Presentation,
@@ -63,6 +65,24 @@ def build_timeline_slide(prs: Presentation,
         return max(0.0, min(1.0, seconds / 86400.0))
 
     week_df = week_df.sort_values(["start_dt", "end_dt", "Numéro"], kind="stable")
+
+    assignee_col = None
+    for cand in (
+        "Assigné à",
+        "Assignée à",
+        "Assigné(e) à",
+        "Assignation",
+        "Affecté à",
+        "Affecte a",
+        "Affecté",
+        "Affectation",
+        "Owner",
+        "Responsable",
+        "Assignee",
+    ):
+        if cand in week_df.columns:
+            assignee_col = cand
+            break
 
     for _, row in week_df.iterrows():
         # Clamp to S+1 window for placement
@@ -180,6 +200,47 @@ def build_timeline_slide(prs: Presentation,
         run_end.text = end_str
         run_end.font.size = Pt(8)
         run_end.font.color.rgb = RGBColor(255, 255, 255)
+
+        if assignee_col:
+            raw_assignee = row.get(assignee_col, "")
+            assignee = str(raw_assignee).strip()
+            if assignee:
+                assignee = assignee.split()[0]
+            if assignee and assignee.lower() not in {"nan", "nat", "none"}:
+                available_width = width - Cm(0.4)
+                if available_width > Cm(1.0):
+                    badge_width = max(
+                        Cm(1.5),
+                        min(available_width, Cm(6.0), Cm(1.4 + 0.25 * len(assignee))),
+                    )
+                    badge_height = Cm(0.6)
+                    badge_left = max(left + Cm(0.1), left + width - badge_width - Cm(0.2))
+                    badge_top = top + height - badge_height - Cm(0.2)
+                    badge = slide.shapes.add_shape(
+                        MSO_SHAPE.ROUNDED_RECTANGLE,
+                        badge_left,
+                        badge_top,
+                        badge_width,
+                        badge_height,
+                    )
+                    badge.fill.solid()
+                    badge.fill.fore_color.rgb = BADGE_COLOR
+                    badge.line.color.rgb = BADGE_COLOR
+                    badge.line.width = Pt(0)
+                    badge.text_frame.margin_left = Cm(0.1)
+                    badge.text_frame.margin_right = Cm(0.1)
+                    badge.text_frame.margin_top = Cm(0.05)
+                    badge.text_frame.margin_bottom = Cm(0.05)
+                    badge_tf = badge.text_frame
+                    badge_tf.clear()
+                    badge_tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+                    p_badge = badge_tf.paragraphs[0]
+                    p_badge.alignment = PP_ALIGN.CENTER
+                    run_badge = p_badge.add_run()
+                    run_badge.text = assignee
+                    run_badge.font.size = Pt(8)
+                    run_badge.font.bold = True
+                    run_badge.font.color.rgb = RGBColor(255, 255, 255)
 
     if title_text:
         # Prefer title placeholder; fallback to adding a top textbox
