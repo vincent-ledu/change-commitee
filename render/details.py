@@ -14,7 +14,7 @@ DETAIL_FIELDS = [
     ("Description", "Description"),
     ("Justification", "Justification"),
     ("Plan d’implémentation", "Plan d’implémentation"),
-    ("Analyse risques & impacts", "Analyse de risques et de l’impact"),
+    ("Analyse risques & impacts", "Analyse des risques et de l’impact"),
     ("Plan de retour arrière", "Plan de retour en arrière"),
     ("Plan de tests", "Plan de tests"),
     ("Informations complémentaires", "Informations complémentaires"),

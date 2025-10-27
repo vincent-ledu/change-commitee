@@ -39,7 +39,7 @@ def _harmonize_columns(df: pd.DataFrame) -> pd.DataFrame:
     canonical = [
         "Numéro", "Type", "Etat", "Date de début planifiée", "Date de fin planifiée",
         "Résumé", "Description", "Justification", "Plan d’implémentation",
-        "Analyse de risques et de l’impact", "Plan de retour en arrière", "Plan de tests",
+        "Analyse des risques et de l’impact", "Plan de retour en arrière", "Plan de tests",
         "Informations complémentaires", "Groupe d’affectation", "Groupe gestionnaire",
         "Demandeur", "Affecté", "Affecté à", "Element de configuration", "CAB requis",
         "Code de fermeture", "Détail de clôture", "Balises",
