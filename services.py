@@ -10,6 +10,7 @@ from data_loader import load_dataset, try_guess_encoding, parse_fr_date
 from periods import week_bounds_splus1, week_bounds_sminus1
 from render.timeline import build_timeline_slide
 from render.details import add_detail_slide
+from render.charts import add_assignee_bar_chart_slide
 
 
 REQUIRED_COLS = [
@@ -181,6 +182,15 @@ def build_base_presentation(template_path: str,
         build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_info,
                              monday_next=monday_next, sunday_next=sunday_next,
                              title_text=title_i)
+    chart_title = (
+        f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — répartition par affecté"
+    )
+    add_assignee_bar_chart_slide(
+        prs,
+        week_df,
+        chart_title,
+        layout_index=splus1_layout_index,
+    )
     def _type_priority(norm_label: str) -> int:
         if norm_label == 'urgent':
             return 0
