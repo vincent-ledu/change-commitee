@@ -60,6 +60,7 @@ from layouts import choose_detail_layout, list_layouts
 from render.utils import hyperlink_for_rfc, set_rfc_url_template, set_timeline_color_map
 from services import prepare_dataframe, compute_weeks, filter_week_df, build_base_presentation, filter_by_tags
 from render.timeline import build_timeline_slide
+from render.charts import add_assignee_bar_chart_slide
 from periods import week_bounds_current
 from config import load_config
 
@@ -506,7 +507,15 @@ def main():
         set_title(prs, prs.slides[-1], f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')}) — Pour information")
         build_timeline_slide(prs, slide_index=len(prs.slides) - 1, week_df=df_info,
                              monday_next=monday_cur, sunday_next=sunday_cur)
-
+        chart_title = (
+            f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')}) — répartition par affecté"
+        )
+        add_assignee_bar_chart_slide(
+            prs,
+            curr_week_df,
+            chart_title,
+            layout_index=args.current_week_layout_index,
+        )
     prs.save(args.out)
     print(f"[OK] Generated: {args.out}")
     print(f"[OK] S+1 week: {monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}")
