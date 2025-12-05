@@ -35,6 +35,7 @@ Main options
 - --sminus1-layout-index N         Layout index for S-1 slides
 - --current-week                   Add current week (S) timeline at the end
 - --current-week-layout-index N    Layout index for the current week slide
+- --assignee-layout-index N        Layout index for the “répartition par affecté” bar chart slide
 - --list-layouts                   Print available template layouts and exit
 - --encoding ENC                   Force CSV encoding (e.g. cp1252, latin1, utf-8-sig)
 - --sep SEP                        Force CSV separator (e.g. ';' ',' '\t')
@@ -368,6 +369,7 @@ def main():
     ap.add_argument("--list-layouts", action="store_true", help="List slide layouts in the template and exit")
     ap.add_argument("--current-week", action="store_true", help="Add a timeline slide for the current week (S)")
     ap.add_argument("--current-week-layout-index", type=int, default=None, help="Optional slide layout index for the current week slide")
+    ap.add_argument("--assignee-layout-index", type=int, default=None, help="Optional slide layout index for the 'répartition par affecté' bar chart slide")
     ap.add_argument("--encoding", default=None, help="Force CSV encoding (e.g. cp1252, latin1, utf-8-sig)")
     ap.add_argument("--sep", default=None, help="Force CSV separator (e.g. ';' ',' '\\t'). If omitted, auto-try common ones.")
     ap.add_argument("--include-tags", default=None, help="Comma-separated tags to include (matches column 'Balises'). Example: RED_TRUC-TEL,GRE_BIDULE-PDT")
@@ -408,6 +410,8 @@ def main():
         setattr(args, 'current_week', True)
     if getattr(args, 'current_week_layout_index', None) is None and _cfg('current_week_layout_index') is not None:
         setattr(args, 'current_week_layout_index', int(_cfg('current_week_layout_index')))
+    if getattr(args, 'assignee_layout_index', None) is None and _cfg('assignee_layout_index') is not None:
+        setattr(args, 'assignee_layout_index', int(_cfg('assignee_layout_index')))
     if not getattr(args, 'include_tags', None) and _cfg('include_tags'):
         tags = _cfg('include_tags')
         if isinstance(tags, list):
@@ -510,11 +514,16 @@ def main():
         chart_title = (
             f"Changements cette semaine ({monday_cur.strftime('%d/%m/%Y')} → {sunday_cur.strftime('%d/%m/%Y')}) — répartition par affecté"
         )
+        assignee_layout_index = (
+            args.assignee_layout_index
+            if args.assignee_layout_index is not None
+            else args.current_week_layout_index
+        )
         add_assignee_bar_chart_slide(
             prs,
             curr_week_df,
             chart_title,
-            layout_index=args.current_week_layout_index,
+            layout_index=assignee_layout_index,
         )
     prs.save(args.out)
     print(f"[OK] Generated: {args.out}")

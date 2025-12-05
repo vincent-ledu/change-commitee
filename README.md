@@ -76,6 +76,7 @@ Mise en page:
 - `--splus1-layout-index N` — layout de la timeline S+1 (sinon: première slide du modèle)
 - `--sminus1-layout-index N` — layout des slides S-1
 - `--current-week-layout-index N` — layout de la slide « semaine en cours »
+- `--assignee-layout-index N` — layout de la slide « répartition par affecté » (bar chart)
 
 Slides optionnelles:
 
@@ -113,7 +114,8 @@ python generate_cab_pptx.py \
   --data cab.xlsx --template template.pptx --out out.pptx \
   --detail-layout-index 2 --splus1-layout-index 1 \
   --sminus1-pie --sminus1-layout-index 3 \
-  --current-week --current-week-layout-index 4
+  --current-week --current-week-layout-index 4 \
+  --assignee-layout-index 5
 ```
 
 ## Notes
