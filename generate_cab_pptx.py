@@ -458,6 +458,7 @@ def main():
         sunday_next=sunday_next,
         detail_layout_index=args.detail_layout_index,
         splus1_layout_index=args.splus1_layout_index,
+        assignee_layout_index=args.assignee_layout_index,
     )
 
     # Then S-1 statistics and non-success list

@@ -115,7 +115,8 @@ def build_base_presentation(template_path: str,
                             monday_next: datetime,
                             sunday_next: datetime,
                             detail_layout_index: int | None = None,
-                            splus1_layout_index: int | None = None) -> Presentation:
+                            splus1_layout_index: int | None = None,
+                            assignee_layout_index: int | None = None) -> Presentation:
     prs = Presentation(template_path)
     # Place the S+1 timeline either on the template's first slide (default)
     # or on a newly added slide using the requested layout index.
@@ -185,11 +186,12 @@ def build_base_presentation(template_path: str,
     chart_title = (
         f"Changements S+1 ({monday_next.strftime('%d/%m/%Y')} → {sunday_next.strftime('%d/%m/%Y')}) — répartition par affecté"
     )
+    chart_layout_index = assignee_layout_index if assignee_layout_index is not None else splus1_layout_index
     add_assignee_bar_chart_slide(
         prs,
         week_df,
         chart_title,
-        layout_index=splus1_layout_index,
+        layout_index=chart_layout_index,
     )
     def _type_priority(norm_label: str) -> int:
         if norm_label == 'urgent':
