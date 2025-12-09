@@ -519,6 +519,8 @@ def main():
             if args.assignee_layout_index is not None
             else args.current_week_layout_index
         )
+        if assignee_layout_index is not None:
+            print(f"[INFO] Using layout index {assignee_layout_index} for 'répartition par affecté'")
         add_assignee_bar_chart_slide(
             prs,
             curr_week_df,
